@@ -1492,7 +1492,7 @@ VerticalScrollEnabled: skip 1
 skip 1
 PBalloonInflating: skip 1
 BonusRoomBlocks: skip 5
-PlayerBehindNet: skip 1
+MarioLayerPriority: skip 1
 PlayerCanJumpWater: skip 1
 PlayerIsFrozen: skip 1
 ActiveBoss: skip 1
@@ -1638,6 +1638,7 @@ PlayerPeaceSign: skip 1
 EndLevelTimer: skip 1
 ColorFadeDir: skip 1
 ColorFadeTimer: skip 1
+; Timers decremented by 00C508
 PlayerAniTimer: skip 1
 IFrameTimer: skip 1
 PickUpItemTimer: skip 1
@@ -1657,6 +1658,7 @@ CapeFloatTimer: skip 1
 CapeSpinTimer: skip 1
 ReznorBridgeTimer: skip 1
 EmptyTimer14A8: skip 1
+
 GroundPoundTimer: skip 1
 YoshiWingGrabTimer: skip 1
 BonusFinishTimer: skip 1

@@ -2561,7 +2561,7 @@ CODE_0293B0:
     BEQ +
     EOR.B #$01
   + PLY
-    EOR.W PlayerBehindNet
+    EOR.W MarioLayerPriority
     BNE CODE_0293F7
     JSL GetSpriteClippingA
     LDA.B _E
@@ -4741,7 +4741,7 @@ ADDR_02A3B1:
     RTS
 
 CODE_02A3F6:
-    LDA.W PlayerBehindNet
+    LDA.W MarioLayerPriority
     EOR.W ExtSpritePriority,X
     BNE Return02A468
     JSL GetMarioClipping

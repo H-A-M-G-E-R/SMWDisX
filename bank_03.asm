@@ -5649,7 +5649,7 @@ CODE_03AC03:
     STZ.W BackgroundColor
     STZ.W BackgroundColor+1
     LDA.B #$03
-    STA.W PlayerBehindNet
+    STA.W MarioLayerPriority
     JSR CODE_03AC63
   + LDA.W SpriteMisc1540,X
     BNE Return03AC4C

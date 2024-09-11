@@ -2608,7 +2608,7 @@ CODE_0CA75A:
     JSL CODE_00CEB1
     PLB
 CODE_0CA764:
-    STZ.W PlayerBehindNet
+    STZ.W MarioLayerPriority
     LDA.W PlayerAniTimer
     BEQ +
     DEC.W PlayerAniTimer

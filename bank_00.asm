@@ -2771,7 +2771,7 @@ CODE_0097BC:
 
 .RoyMortonLudwig:                             ; Roy, Morton, & Ludwig
     LDA.B #3
-    STA.W PlayerBehindNet                     ; Disable player interaction with sprites
+    STA.W MarioLayerPriority                  ; Disable player interaction with sprites
     LDA.B #100*2                              ;\
     STA.B OAMAddress                          ;/ OAM slot 100 gets highest priority
     LDA.B #!SprTileset_RoyMortonLudwig
@@ -7902,13 +7902,13 @@ CODE_00C4BC:
   + LDA.B SpriteLock                          ; \ Branch if sprites locked
     BNE CODE_00C569                           ; /
     INC.B EffFrame
-    LDX.B #$13
-CODE_00C508:
-    LDA.W ColorFadeTimer,X
-    BEQ +
-    DEC.W ColorFadeTimer,X
-  + DEX
-    BNE CODE_00C508
+    LDX.B #EmptyTimer14A8-PlayerAniTimer+1    ;\
+CODE_00C508:                                  ;|
+    LDA.W PlayerAniTimer-1,X                  ;|
+    BEQ +                                     ;| Decrement timers from PlayerAniTimer to EmptyTimer14A8
+    DEC.W PlayerAniTimer-1,X                  ;|
+  + DEX                                       ;|
+    BNE CODE_00C508                           ;/
     LDA.B EffFrame
     AND.B #$03
     BNE CODE_00C569
@@ -8908,7 +8908,7 @@ CODE_00CD36:
 CODE_00CD39:
     STZ.W PlayerTurningPose
     LDY.W PBalloonInflating
-    BNE CODE_00CD95
+    BNE SetPBalloonPose
     LDA.W PlayerClimbingRope
     BEQ +
     LDA.B #$1F
@@ -8923,7 +8923,7 @@ CODE_00CD39:
     CMP.B #$1B
     BNE CODE_00CD79
     LDA.B byetudlrHold
-    AND.B #$0C
+    AND.B #!DpadUp|!DpadDown
     BEQ CODE_00CD79
     LDY.B PlayerInAir
     BNE CODE_00CD72
@@ -8940,12 +8940,12 @@ CODE_00CD72:
 CODE_00CD79:
     LDA.B PlayerInWater
     BEQ CODE_00CD82
-    JSR CODE_00D988
+    JSR CODE_00D988                           ; Handle swimming animation
     BRA CODE_00CD8F
 
 CODE_00CD82:
     JSR CODE_00D5F2
-    JSR CODE_00D062
+    JSR HandleCapeSpinAndShootingFireballs    ; Handle cape spin and shooting fireballs
     JSR CODE_00D7E4
 CODE_00CD8B:
     JSL CODE_00CEB1
@@ -8954,15 +8954,15 @@ CODE_00CD8F:
     BNE CODE_00CDAD
     RTS
 
-CODE_00CD95:
-    LDA.B #$42
-    LDX.B Powerup
-    BEQ +
-    LDA.B #$43
-  + DEY
-    BEQ +
-    STY.W PBalloonInflating
-    LDA.B #$0F                                ; \ Mario's image = Going down tube
+SetPBalloonPose:
+    LDA.B #$42                                ; Pose = small balloon
+    LDX.B Powerup                             ; \
+    BEQ +                                     ; | If not small: pose = big balloon
+    LDA.B #$43                                ; /
+  + DEY                                       ; decrement timer
+    BEQ +                                     ; if zero: set pose
+    STY.W PBalloonInflating                   ; store timer
+    LDA.B #$0F                                ; \ Mario's image = facing towards camera/inflating
   + STA.W PlayerPose                          ; /
 CODE_00CDA8:
     RTS
@@ -9204,9 +9204,9 @@ CODE_00CF62:
     LDA.B #$1D                                ; |End Select
   + LDY.B PlayerIsDucking                     ; \ If Ducking while jumping
     BNE CODE_00CF85                           ; / Branch to $CF85
-    LDA.W ShootFireTimer                      ; \ If (Unknown) = 0
+    LDA.W ShootFireTimer                      ; \ If not shooting fireball
     BEQ CODE_00CF7E                           ; / Branch to $CF7E
-    LDA.B #$3F                                ; A = #$3F
+    LDA.B #$3F                                ; A = #$3F (shooting fireball)
     LDY.B PlayerInAir                         ; \ If Mario isn't in air,
     BEQ CODE_00CF85                           ; |branch to $CF85
     LDA.B #$16                                ; |Otherwise, set A to #$16 and
@@ -9338,42 +9338,42 @@ CODE_00D044:
     SEP #$20                                  ; A->8
     RTS
 
-CODE_00D062:
-    LDA.B Powerup
-    CMP.B #$02
-    BNE CODE_00D081
-    BIT.B byetudlrFrame
-    BVC Return00D0AD
-    LDA.B PlayerIsDucking
-    ORA.W PlayerRidingYoshi
-    ORA.W SpinJumpFlag
-    BNE Return00D0AD
-    LDA.B #$12
-    STA.W CapeSpinTimer
+HandleCapeSpinAndShootingFireballs:
+    LDA.B Powerup                             ; \
+    CMP.B #!Powerup_Cape                      ; | Branch if not cape
+    BNE HandleShootingFireballs               ; /
+    BIT.B byetudlrFrame                       ; \ Branch if Y not pressed
+    BVC Return00D0AD                          ; /
+    LDA.B PlayerIsDucking                     ; \
+    ORA.W PlayerRidingYoshi                   ; | Branch if ducking, riding Yoshi or spinjumping
+    ORA.W SpinJumpFlag                        ; |
+    BNE Return00D0AD                          ; /
+    LDA.B #$12                                ; \ Set cape spin animation timer
+    STA.W CapeSpinTimer                       ; /
     LDA.B #!SFX_SPIN                          ; \ Play sound effect
     STA.W SPCIO3                              ; /
     RTS
 
-CODE_00D081:
-    CMP.B #$03
-    BNE Return00D0AD
-    LDA.B PlayerIsDucking
-    ORA.W PlayerRidingYoshi
-    BNE Return00D0AD
-    BIT.B byetudlrFrame
-    BVS CODE_00D0AA
-    LDA.W SpinJumpFlag
-    BEQ Return00D0AD
-    INC.W SpinjumpFireball
-    LDA.W SpinjumpFireball
-    AND.B #$0F
-    BNE Return00D0AD
-    TAY
-    LDA.W SpinjumpFireball
-    AND.B #$10
-    BEQ +
-    INY
-  + STY.B PlayerDirection
+HandleShootingFireballs:
+    CMP.B #!Powerup_Flower                    ; \ Branch if not fire
+    BNE Return00D0AD                          ; /
+    LDA.B PlayerIsDucking                     ; \
+    ORA.W PlayerRidingYoshi                   ; | Branch if ducking or riding Yoshi
+    BNE Return00D0AD                          ; /
+    BIT.B byetudlrFrame                       ; \ Shoot fireball and return if Y pressed
+    BVS CODE_00D0AA                           ; /
+    LDA.W SpinJumpFlag                        ; \ If spinjumping:
+    BEQ Return00D0AD                          ; /
+    INC.W SpinjumpFireball                    ; Increment spinjump fireball frame
+    LDA.W SpinjumpFireball                    ; \
+    AND.B #$0F                                ; | If not divisible by 16: return
+    BNE Return00D0AD                          ; /
+    TAY                                       ; \
+    LDA.W SpinjumpFireball                    ; |
+    AND.B #$10                                ; | If bit $10 set: shoot right, else: shoot left
+    BEQ +                                     ; |
+    INY                                       ; |
+  + STY.B PlayerDirection                     ; /
 CODE_00D0AA:
     JSR ShootFireball                         ; haha, I read this as "FEAR" at first
 Return00D0AD:
@@ -9455,8 +9455,8 @@ CODE_00D137:
   + RTS
 
 CODE_00D140:
-    LDA.B #$7F
-    STA.W IFrameTimer
+    LDA.B #$7F                                ; \ 128 iframes
+    STA.W IFrameTimer                         ; /
     BRA CODE_00D158
 
 MushroomAni:
@@ -9596,7 +9596,7 @@ CODE_00D22D:
     LDA.B #$40                                ; \ Set holding X/Y on controller
     STA.B byetudlrHold                        ; /
     LDA.B #$02                                ; \ Set behind scenery flag
-    STA.W PlayerBehindNet                     ; /
+    STA.W MarioLayerPriority                  ; /
     LDA.B PlayerPipeAction
     CMP.B #$04
     LDY.B PipeTimer
@@ -9624,7 +9624,7 @@ CODE_00D22D:
 CODE_00D268:
     BCC CODE_00D273
 CODE_00D26A:
-    STZ.W PlayerBehindNet                     ; \ In new level, reset values
+    STZ.W MarioLayerPriority                  ; \ In new level, reset values
     STZ.W YoshiInPipeSetting                  ; /
     JMP CODE_00D158
 
@@ -9645,7 +9645,7 @@ CODE_00D273:
 PipeCannonAni:
     JSR NoButtons
     LDA.B #$02
-    STA.W PlayerBehindNet
+    STA.W MarioLayerPriority
     LDA.B #$0C
     STA.B PlayerInAir
     JSR CODE_00CD8B
@@ -9660,7 +9660,7 @@ PipeCannonAni:
     LDA.B #!SFX_KAPOW                         ; \ Play sound effect
     STA.W SPCIO3                              ; /
 CODE_00D2AA:
-    STZ.W PlayerBehindNet
+    STZ.W MarioLayerPriority
     STZ.W YoshiInPipeSetting
     STZ.B SpriteLock                          ; Set sprites not locked
   + LDA.B #$40                                ; \ X speed = #$40
@@ -9915,21 +9915,21 @@ endif                                         ;/================================
 DATA_00D5EE:
     db $68,$70
 
-DATA_00D5F0:
+SpinjumpFireballInit:
     db $1C,$0C
 
 CODE_00D5F2:
-    LDA.B PlayerInAir
-    BEQ +
-    JMP CODE_00D682
+    LDA.B PlayerInAir                         ; \
+    BEQ +                                     ; | If in air: jump
+    JMP CODE_00D682                           ; /
 
-  + STZ.B PlayerIsDucking
+  + STZ.B PlayerIsDucking                     ; Clear ducking flag
     LDA.W PlayerSlopePose
     BNE +
-    LDA.B byetudlrHold
-    AND.B #$04
-    BEQ +
-    STA.B PlayerIsDucking
+    LDA.B byetudlrHold                        ; \
+    AND.B #!DpadDown                          ; | If holding down: duck
+    BEQ +                                     ; |
+    STA.B PlayerIsDucking                     ; /
     STZ.W CapeInteracts
   + LDA.W StandOnSolidSprite
     CMP.B #$02
@@ -9937,9 +9937,9 @@ CODE_00D5F2:
     LDA.B PlayerBlockedDir
     AND.B #$08
     BNE CODE_00D61E
-    LDA.B byetudlrFrame
-    ORA.B axlr0000Frame
-    BMI CODE_00D630
+    LDA.B byetudlrFrame                       ; \
+    ORA.B axlr0000Frame                       ; | If B or A pressed: branch
+    BMI CODE_00D630                           ; /
 CODE_00D61E:
     LDA.B PlayerIsDucking
     BEQ CODE_00D682
@@ -9959,17 +9959,17 @@ CODE_00D630:
     LSR A
     AND.B #$FE
     TAX
-    LDA.B axlr0000Frame
-    BPL CODE_00D65E
-    LDA.W IsCarryingItem
-    BNE CODE_00D65E
-    INC A
-    STA.W SpinJumpFlag
+    LDA.B axlr0000Frame                       ; \ If A pressed:
+    BPL CODE_00D65E                           ; /
+    LDA.W IsCarryingItem                      ; \ If not carrying item:
+    BNE CODE_00D65E                           ; /
+    INC A                                     ; \ Set spinjump flag
+    STA.W SpinJumpFlag                        ; /
     LDA.B #!SFX_SPIN                          ; \ Play sound effect
     STA.W SPCIO3                              ; /
-    LDY.B PlayerDirection
-    LDA.W DATA_00D5F0,Y
-    STA.W SpinjumpFireball
+    LDY.B PlayerDirection                     ; \
+    LDA.W SpinjumpFireballInit,Y              ; | 4 frames until first spinjump fireball spawns, first one is based on player's direction
+    STA.W SpinjumpFireball                    ; /
     LDA.W PlayerRidingYoshi
     BNE CODE_00D682
     INX
@@ -9996,7 +9996,7 @@ CODE_00D682:
     LDA.W PlayerSlopePose
     BMI CODE_00D692
     LDA.B byetudlrHold
-    AND.B #$03
+    AND.B #!DpadLeft|!DpadRight
     BNE CODE_00D6B1
 CODE_00D68D:
     LDA.W PlayerSlopePose
@@ -10395,7 +10395,7 @@ CODE_00D8CD:
     LDA.W YoshiHasWingsEvt                    ; \ Branch if not winged Yoshi
     LSR A                                     ; |
     BEQ CODE_00D8E7                           ; /
-    LDY.B #$02                                ; \ Branch if not Caped Mario
+    LDY.B #!Powerup_Cape                      ; \ Branch if not Caped Mario
     CPY.B Powerup                             ; |
     BEQ +                                     ; /
     INX                                       ; X= #$01
@@ -10403,7 +10403,7 @@ CODE_00D8CD:
 
 CODE_00D8E7:
     LDA.B Powerup                             ; \ Branch if not Caped Mario
-    CMP.B #$02                                ; |
+    CMP.B #!Powerup_Cape                      ; |
     BNE CODE_00D928                           ; /
     LDA.B PlayerInAir                         ; \ Branch if $72 != 0C
     CMP.B #$0C                                ; |
@@ -10545,7 +10545,7 @@ CODE_00D9AF:
     AND.B #$04
     BEQ +
 CODE_00D9B5:
-    JSR CODE_00DAA9
+    JSR SwimSoundAndAni
     TYA
     CLC
     ADC.B #$08
@@ -10584,7 +10584,7 @@ CODE_00D9EB:
     BPL CODE_00DA0B
     LDA.W PlayerCanJumpWater
     BNE CODE_00DA0B
-    JSR CODE_00DAA9
+    JSR SwimSoundAndAni
     LDA.B PlayerInAir
     BNE +
     LDA.B #$0B
@@ -10667,7 +10667,7 @@ CODE_00DA69:
     INX
   + JSR CODE_00D772
 CODE_00DA7C:
-    JSR CODE_00D062
+    JSR HandleCapeSpinAndShootingFireballs    ; Handle cape spin and shooting fireballs
     JSL CODE_00CEB1
     LDA.W CapeSpinTimer
     BNE Return00DA8C
@@ -10676,7 +10676,7 @@ CODE_00DA7C:
 Return00DA8C:
     RTS
 
-  + LDA.B #$18
+  + LDA.B #$18                                ; A = $18 (shoot fireball while swimming pose)
     LDY.W ShootFireTimer
     BNE +
     LDA.W PlayerAniTimer
@@ -10691,7 +10691,7 @@ Return00DA8C:
   + STA.W PlayerPose
     RTS
 
-CODE_00DAA9:
+SwimSoundAndAni:
     LDA.B #!SFX_SWIM                          ; \ Play sound effect
     STA.W SPCIO0                              ; /
     LDA.W PlayerAniTimer
@@ -10787,7 +10787,7 @@ CODE_00DB45:
 CODE_00DB7D:
     STZ.B PlayerXSpeed+1
     STZ.B PlayerXSpeed
-    LDX.W PlayerBehindNet
+    LDX.W MarioLayerPriority
     LDA.W PunchNetTimer
     BEQ +
     TXA
@@ -11026,7 +11026,7 @@ DATA_00DC7C:                                  ;!
     db $02,$02,$02,$02,$02,$02,$02,$02        ;!
 endif                                         ;/===============================================
 
-DATA_00DCEC:
+MarioTileOffIndexIndices:
     db $00,$00,$00,$00,$00,$00,$00,$00
     db $00,$00,$00,$00,$00,$00,$00,$00
     db $02,$04,$04,$04,$0E,$08,$00,$00
@@ -11037,13 +11037,13 @@ DATA_00DCEC:
     db $00,$00,$00,$00,$00,$06,$00,$00
     db $00,$00,$00,$0A,$00,$00
 
-DATA_00DD32:
+MarioTileOffIndices:
     db $00,$08,$10,$14,$18,$1E,$24,$24
     db $28,$30,$38,$3E,$44,$4A,$50,$54
     db $58,$58,$5C,$60,$64,$68,$6C,$70
     db $74,$78,$7C,$80
 
-DATA_00DD4E:
+MarioTileXOff:
     db $00,$00,$00,$00,$10,$00,$10,$00
     db $00,$00,$00,$00,$F8,$FF,$F8,$FF
     db $0E,$00,$06,$00,$F2,$FF,$FA,$FF
@@ -11074,7 +11074,7 @@ DATA_00DD4E:
     db $FB,$FF,$FF,$FF,$0F,$00,$01,$00
     db $F9,$FF,$00,$00
 
-DATA_00DE32:
+MarioTileYOff:
     db $01,$00,$11,$00,$11,$00,$19,$00
     db $01,$00,$11,$00,$11,$00,$19,$00
     db $0C,$00,$14,$00,$0C,$00,$14,$00
@@ -11105,10 +11105,10 @@ DATA_00DE32:
     db $18,$00,$00,$00,$10,$00,$00,$00
     db $10,$00,$F8,$FF
 
-TilesetIndex:
+MarioPowerupTileOffset:
     db $00,$46,$83,$46
 
-TileExpansion_:
+MarioTileNoIndices:
     db $00,$00,$00,$00,$00,$00,$00,$00
     db $00,$00,$00,$00,$00,$00,$00,$00
     db $00,$00,$00,$00,$00,$00,$00,$00
@@ -11133,7 +11133,7 @@ TileExpansion_:
     db $00,$00,$00,$24,$00,$00,$00,$00
     db $00,$00,$00,$00,$00,$00,$00,$00
     db $00,$00,$00,$00,$00,$00,$00,$00
-Mario8x8Tiles:
+MarioTileNo:
     db $00,$02,$80,$80,$00,$02,$0C,$80
     db $00,$02,$1A,$1B,$00,$02,$0D,$80
     db $00,$02,$22,$23,$00,$02,$32,$33
@@ -11142,8 +11142,8 @@ Mario8x8Tiles:
     db $00,$02,$02,$80,$04,$7F,$4A,$5B
     db $4B,$5A
 
-DATA_00E00C:
-    db $50,$50,$50,$09,$50,$50,$50,$50
+Mario16x16TopTileIndices:                     ; Mario's tiles are arranged by 8 16*16 tiles per row.
+    db $50,$50,$50,$09,$50,$50,$50,$50        ; These are indices where the high nibble indexes a 16-pixel row, the low 3 bits index a 16-pixel column, and bit $08, if set, offsets by 16 rows/128 tiles.
     db $50,$50,$09,$2B,$50,$2D,$50,$D5
     db $2E,$C4,$C4,$C4,$D6,$B6,$50,$50
     db $50,$50,$50,$50,$50,$C5,$D7,$2A
@@ -11167,7 +11167,7 @@ DATA_00E00C:
     db $90,$B3,$D4,$A5,$C0,$08,$64,$0C
     db $0E,$1B,$51,$49,$4A,$48,$4B,$4C
     db $5D,$5E,$5F,$E3,$90,$5F,$5F,$C5
-DATA_00E0CC:
+Mario16x16BottomTileIndices:
     db $71,$60,$60,$19,$94,$96,$96,$A2
     db $97,$97,$18,$3B,$B4,$3D,$A7,$E5
     db $2F,$D3,$C3,$C3,$F6,$D0,$B1,$81
@@ -11192,8 +11192,8 @@ DATA_00E0CC:
     db $10,$B7,$E4,$B5,$61,$0A,$55,$0D
     db $75,$77,$1E,$59,$59,$58,$02,$02
     db $6D,$6E,$6F,$F3,$68,$6F,$6F,$06
-MarioPalIndex:
-    db $00,$40
+MarioSpriteXFlip:
+    db $00,!OBJ_XFlip
 
 DATA_00E18E:
     db $00,$00,$00,$00,$00,$00,$00,$00
@@ -11250,64 +11250,66 @@ DATA_00E266:
     db $04,$12,$04,$04,$04,$12,$04,$04
     db $04,$12,$04,$04
 
-DATA_00E292:
-    db $01,$01,$01,$01,$02,$02,$02,$02
-    db $04,$04,$04,$04,$08,$08,$08,$08
+IFrameFlashyThing:
+    db $01,$01,$01,$01                        ; timer < 32 (flashes every frame)
+    db $02,$02,$02,$02                        ; timer < 64 (flashes every 2 frames)
+    db $04,$04,$04,$04                        ; timer < 96 (flashes every 4 frames)
+    db $08,$08,$08,$08                        ; timer < 128 (flashes every 8 frames)
 
-DATA_00E2A2:
-    dw PlayerColors
-    dw PlayerColors+$14
-    dw PlayerColors
-    dw PlayerColors+$14
-    dw PlayerColors
-    dw PlayerColors+$14
-    dw PlayerColors+$28
-    dw PlayerColors+$3C
+PlayerPalettePointers:
+    dw PlayerColors                           ; Small Mario
+    dw PlayerColors+$14                       ; Small Luigi
+    dw PlayerColors                           ; Big Mario
+    dw PlayerColors+$14                       ; Big Mario
+    dw PlayerColors                           ; Cape Mario (also invincible frame 0)
+    dw PlayerColors+$14                       ; Cape Luigi (also invincible frame 1)
+    dw PlayerColors+$28                       ; Fire Mario (also invincible frame 2)
+    dw PlayerColors+$3C                       ; Fire Luigi (also invincible frame 3)
 
-DATA_00E2B2:
+MarioTilesOAMOffset:
     db $10,$D4,$10,$E8
 
-DATA_00E2B6:
-    db $08,$CC,$08
+CapeTilesOAMOffset:
+    db $08,$CC,$08,$E0
 
-DATA_00E2B9:
-    db $E0,$10,$10,$30
+MarioSpritePriorities:
+    db !OBJ_Priority1,!OBJ_Priority1,!OBJ_Priority3
 
 DrawMarioAndYoshi:
     PHB
     PHK
     PLB
-    LDA.B PlayerHiddenTiles
-    CMP.B #$FF
-    BEQ +
-    JSL CODE_01EA70
+    LDA.B PlayerHiddenTiles                   ; \
+    CMP.B #$FF                                ; | If hidden tiles set to %11111111: don't draw Yoshi
+    BEQ +                                     ; /
+    JSL DrawYoshi
   + LDY.W CyclePaletteTimer
     BNE CODE_00E308
     LDY.W InvinsibilityTimer                  ; \ Branch if Mario doesn't have star
-    BEQ CODE_00E314                           ; /
+    BEQ DrawMario                             ; /
     LDA.B PlayerHiddenTiles
     CMP.B #$FF
     BEQ +
-    LDA.B EffFrame
-    AND.B #$03
-    BNE +
-    DEC.W InvinsibilityTimer                  ; Decrease star timer
-  + LDA.B TrueFrame
-    CPY.B #con($1E,$1E,$1E,$18,$18)
-    BCC CODE_00E30A
+    LDA.B EffFrame                            ; \
+    AND.B #$03                                ; | Decrease star timer every 4 frames
+    BNE +                                     ; |
+    DEC.W InvinsibilityTimer                  ; /
+  + LDA.B TrueFrame                           ; \
+    CPY.B #con($1E,$1E,$1E,$18,$18)           ; | slow down palette cycling when invincibility begins to end (below 30 frames NTSC, 24 frames PAL)
+    BCC CODE_00E30A                           ; /
     BNE CODE_00E30C
-    LDA.W MusicBackup
-    CMP.B #$FF
-    BEQ CODE_00E308
-    AND.B #$7F
-    STA.W MusicBackup
-    TAX
-    LDA.W BluePSwitchTimer
-    ORA.W SilverPSwitchTimer
-    ORA.W DirectCoinTimer
-    BEQ +
-    LDX.B #!BGM_PSWITCH
-  + STX.W SPCIO2                              ; / Change music
+    LDA.W MusicBackup                         ; \
+    CMP.B #$FF                                ; |
+    BEQ CODE_00E308                           ; |
+    AND.B #$7F                                ; |
+    STA.W MusicBackup                         ; |
+    TAX                                       ; | restore music when invincibility ends
+    LDA.W BluePSwitchTimer                    ; |
+    ORA.W SilverPSwitchTimer                  ; |
+    ORA.W DirectCoinTimer                     ; |
+    BEQ +                                     ; |
+    LDX.B #!BGM_PSWITCH                       ; |
+  + STX.W SPCIO2                              ; /
 CODE_00E308:
     LDA.B TrueFrame
 CODE_00E30A:
@@ -11321,14 +11323,14 @@ CODE_00E30C:
     INC A
     BRA +
 
-CODE_00E314:
-    LDA.B Powerup
-    ASL A
-    ORA.W PlayerTurnLvl
+DrawMario:
+    LDA.B Powerup                             ; \
+    ASL A                                     ; | Set palette depending on powerup and if playing as Mario or Luigi
+    ORA.W PlayerTurnLvl                       ; /
   + ASL A
     TAY
     REP #$20                                  ; A->16
-    LDA.W DATA_00E2A2,Y
+    LDA.W PlayerPalettePointers,Y
     STA.W PlayerPalletePtr
     SEP #$20                                  ; A->8
     LDX.W PlayerPose
@@ -11348,91 +11350,91 @@ CODE_00E33E:
     LDA.B PlayerXPosNext
     SBC.B Layer1XPos
     STA.B PlayerXPosScrRel
-    LDA.W ScrShakePlayerYOffset
-    AND.W #$00FF
-    CLC
-    ADC.B PlayerYPosNext
-    LDY.B Powerup
-    CPY.B #$01
-    LDY.B #$01
-    BCS +
-    DEC A
-    DEY
-  + CPX.B #$0A
-    BCS +
-    CPY.W PlayerWalkingPose
-  + SBC.B Layer1YPos
-    CPX.B #$1C
-    BNE +
-    ADC.W #$0001
-  + STA.B PlayerYPosScrRel
+    LDA.W ScrShakePlayerYOffset               ; \
+    AND.W #$00FF                              ; | A = Mario's Y position + Y shake
+    CLC                                       ; |
+    ADC.B PlayerYPosNext                      ; /
+    LDY.B Powerup                             ; \
+    CPY.B #$01                                ; |
+    LDY.B #$01                                ; | If big, cape or fire: Y = 1, else: A -= 1, Y = 0
+    BCS +                                     ; |
+    DEC A                                     ; |
+    DEY                                       ; /
+  + CPX.B #$0A                                ; \
+    BCS +                                     ; | If pose < $0A (walking) and Y < walking pose: A -= 1
+    CPY.W PlayerWalkingPose                   ; /
+  + SBC.B Layer1YPos                          ; A -= layer 1 Y position
+    CPX.B #$1C                                ; \
+    BNE +                                     ; | If pose = $1C: A += 2
+    ADC.W #$0001                              ; /
+  + STA.B PlayerYPosScrRel                    ; save Mario's Y position relative to screen
     SEP #$20                                  ; A->8
-    LDA.W IFrameTimer
-    BEQ +
-    LSR A
-    LSR A
-    LSR A
-    TAY
-    LDA.W DATA_00E292,Y
-    AND.W IFrameTimer
-    ORA.B SpriteLock
-    ORA.W PlayerIsFrozen
+    LDA.W IFrameTimer                         ; \ If no iframes: draw
+    BEQ +                                     ; /
+    LSR A                                     ; \
+    LSR A                                     ; |
+    LSR A                                     ; | do flashing
+    TAY                                       ; |
+    LDA.W IFrameFlashyThing,Y                 ; |
+    AND.W IFrameTimer                         ; /
+    ORA.B SpriteLock                          ; show if sprites locked
+    ORA.W PlayerIsFrozen                      ; show if mario is frozen
     BNE +
     PLB
     RTL
 
-  + LDA.B #$C8
-    CPX.B #$43
-    BNE +
-    LDA.B #$E8
+  + LDA.B #%11001000                          ; bit array for size of tiles, left to right (tiles 0,1,4 are big)
+    CPX.B #$43                                ; \
+    BNE +                                     ; | If big balloon, tiles 0,1,2,4 are big
+    LDA.B #%11101000                          ; /
   + STA.B _4
-    CPX.B #$29
-    BNE +
-    LDA.B Powerup
-    BNE +
-    LDX.B #$20
-  + LDA.W DATA_00DCEC,X
-    ORA.B PlayerDirection
-    TAY
-    LDA.W DATA_00DD32,Y
-    STA.B _5
+    CPX.B #$29                                ; \ Branch if pose != entering horizontal pipe on Yoshi
+    BNE +                                     ; /
+    LDA.B Powerup                             ; \
+    BNE +                                     ; | if no powerup: X = $20
+    LDX.B #$20                                ; /
+  + LDA.W MarioTileOffIndexIndices,X          ; \
+    ORA.B PlayerDirection                     ; |
+    TAY                                       ; | Set tile offset index
+    LDA.W MarioTileOffIndices,Y               ; |
+    STA.B _5                                  ; /
     LDY.B Powerup
-    LDA.W PlayerPose
-    CMP.B #$3D
-    BCS +
-    ADC.W TilesetIndex,Y
-  + TAY
-    LDA.W TileExpansion_,Y
-    STA.B _6
-    LDA.W DATA_00E00C,Y
-    STA.B _A
-    LDA.W DATA_00E0CC,Y
-    STA.B _B
-    LDA.B SpriteProperties
-    LDX.W PlayerBehindNet
-    BEQ +
-    LDA.W DATA_00E2B9,X
-  + LDY.W DATA_00E2B2,X
-    LDX.B PlayerDirection
-    ORA.W MarioPalIndex,X
-    STA.W OAMTileAttr+$100,Y
-    STA.W OAMTileAttr+$104,Y
-    STA.W OAMTileAttr+$10C,Y
-    STA.W OAMTileAttr+$110,Y
-    STA.W OAMTileAttr+$F8,Y
-    STA.W OAMTileAttr+$FC,Y
-    LDX.B _4
-    CPX.B #$E8
-    BNE +
-    EOR.B #$40
-  + STA.W OAMTileAttr+$108,Y
-    JSR CODE_00E45D
-    JSR CODE_00E45D
-    JSR CODE_00E45D
-    JSR CODE_00E45D
-    LDA.B Powerup
-    CMP.B #$02
-    BNE CODE_00E458
+    LDA.W PlayerPose                          ; \
+    CMP.B #$3D                                ; | If it's greater than $3C: branch
+    BCS +                                     ; /
+    ADC.W MarioPowerupTileOffset,Y            ; offset by $46 if big or fire, $83 if cape
+  + TAY                                       ; \
+    LDA.W MarioTileNoIndices,Y                ; | index for main tile numbers
+    STA.B _6                                  ; /
+    LDA.W Mario16x16TopTileIndices,Y          ; \ to be transfered to tile 0
+    STA.B _A                                  ; /
+    LDA.W Mario16x16BottomTileIndices,Y       ; \ to be transfered to tile 2
+    STA.B _B                                  ; /
+    LDA.B SpriteProperties                    ; default properties
+    LDX.W MarioLayerPriority                  ; \
+    BEQ +                                     ; | Overwrite priority if MarioLayerPriority > 0
+    LDA.W MarioSpritePriorities-1,X           ; /
+  + LDY.W MarioTilesOAMOffset,X               ; OAM offset
+    LDX.B PlayerDirection                     ; \ Set X flip if facing right
+    ORA.W MarioSpriteXFlip,X                  ; /
+    STA.W OAMTileAttr+$100,Y                  ; \
+    STA.W OAMTileAttr+$104,Y                  ; | main tiles (0,1,3)
+    STA.W OAMTileAttr+$10C,Y                  ; /
+    STA.W OAMTileAttr+$110,Y                  ; \
+    STA.W OAMTileAttr+$F8,Y                   ; | cape tiles (4,5,6,7)
+    STA.W OAMTileAttr+$FC,Y                   ; /
+    LDX.B _4                                  ; \
+    CPX.B #%11101000                          ; |
+    BNE +                                     ; | toggle X flip for main tile 2 if big balloon
+    EOR.B #$40                                ; |
+  + STA.W OAMTileAttr+$108,Y                  ; /
+    JSR DrawMarioOAMTile                      ; \
+    JSR DrawMarioOAMTile                      ; | draw main tiles
+    JSR DrawMarioOAMTile                      ; |
+    JSR DrawMarioOAMTile                      ; /
+    LDA.B Powerup                             ; \
+    CMP.B #!Powerup_Cape                      ; | Branch if no cape
+    BNE CODE_00E458                           ; /
     PHY
     LDA.B #$2C
     STA.B _6
@@ -11467,69 +11469,69 @@ CODE_00E432:
     LDA.W DATA_00E1D4,X
     TSB.B PlayerHiddenTiles
     BMI +
-    JSR CODE_00E45D
-  + LDX.W PlayerBehindNet
-    LDY.W DATA_00E2B6,X
-    JSR CODE_00E45D
+    JSR DrawMarioOAMTile
+  + LDX.W MarioLayerPriority
+    LDY.W CapeTilesOAMOffset,X
+    JSR DrawMarioOAMTile
     LDA.B _E
     STA.B _6
-    JSR CODE_00E45D
+    JSR DrawMarioOAMTile
 CODE_00E458:
-    JSR CODE_00F636
+    JSR SetPlayerDynamicGFXPointers
     PLB
     RTL
 
-CODE_00E45D:
-    LSR.B PlayerHiddenTiles
-    BCS +
+DrawMarioOAMTile:
+    LSR.B PlayerHiddenTiles                   ; \ right shift PlayerHiddenTiles and skip if the bit that's shifted out is 1
+    BCS +                                     ; /
     LDX.B _6
-    LDA.W Mario8x8Tiles,X
-    BMI +
+    LDA.W MarioTileNo,X                       ; \ Skip if tile number >= $80
+    BMI +                                     ; /
     STA.W OAMTileNo+$100,Y
-    LDX.B _5
+    LDX.B _5                                  ; index to tile offsets
     REP #$20                                  ; A->16
     LDA.B PlayerYPosScrRel
     CLC
-    ADC.W DATA_00DE32,X
-    PHA
-    CLC
-    ADC.W #$0010
-    CMP.W #$0100
-    PLA
+    ADC.W MarioTileYOff,X
+    PHA                                       ; \
+    CLC                                       ; |
+    ADC.W #$0010                              ; | If not -$10 <= Y position of tile < $F0: don't draw
+    CMP.W #$0100                              ; |
+    PLA                                       ; /
     SEP #$20                                  ; A->8
     BCS +
     STA.W OAMTileYPos+$100,Y
     REP #$20                                  ; A->16
     LDA.B PlayerXPosScrRel
     CLC
-    ADC.W DATA_00DD4E,X
-    PHA
-    CLC
-    ADC.W #$0080
-    CMP.W #$0200
-    PLA
+    ADC.W MarioTileXOff,X
+    PHA                                       ; \
+    CLC                                       ; |
+    ADC.W #$0080                              ; | If not -$80 <= X position of tile < $180: don't draw
+    CMP.W #$0200                              ; |
+    PLA                                       ; /
     SEP #$20                                  ; A->8
     BCS +
     STA.W OAMTileXPos+$100,Y
-    XBA
-    LSR A
-  + PHP
-    TYA
-    LSR A
-    LSR A
-    TAX
-    ASL.B _4
-    ROL A
-    PLP
-    ROL A
-    AND.B #$03
-    STA.W OAMTileSize+$40,X
-    INY
-    INY
-    INY
-    INY
-    INC.B _5
-    INC.B _5
+    XBA                                       ; \ set carry if high X
+    LSR A                                     ; /
+  + PHP                                       ; push carry
+    TYA                                       ; \
+    LSR A                                     ; | index to tile size
+    LSR A                                     ; |
+    TAX                                       ; /
+    ASL.B _4                                  ; left shift _4 and set carry to the bit that's shifted out
+    ROL A                                     ; shift carry to size bit
+    PLP                                       ; pull carry
+    ROL A                                     ; shift carry to high X bit
+    AND.B #$03                                ; \ mask out extra bits
+    STA.W OAMTileSize+$40,X                   ; /
+    INY                                       ; \
+    INY                                       ; | next OAM tile
+    INY                                       ; |
+    INY                                       ; /
+    INC.B _5                                  ; \ tile offsets index += 2
+    INC.B _5                                  ; /
     INC.B _6
     RTS
 
@@ -11858,12 +11860,12 @@ CODE_00EA0D:
     BPL +
 CODE_00EA32:
     STZ.B PlayerXSpeed+1
-  + LDA.W PlayerBehindNet
+  + LDA.W MarioLayerPriority
     CMP.B #$01
     BNE +
     LDA.B InteractionPtsClimbable
     BNE +
-    STZ.W PlayerBehindNet
+    STZ.W MarioLayerPriority
   + STZ.W PlayerCanJumpWater
     LDA.B LevelIsWater
     BNE CODE_00EA5E
@@ -12931,10 +12933,10 @@ Return00F1F8:
     LSR A
     LSR A
     TAX
-    LDA.W PBalloonInflating,Y
+    LDA.W BonusRoomBlocks-1,Y
     ORA.L DATA_00F0EC,X
-    LDX.W PBalloonInflating,Y
-    STA.W PBalloonInflating,Y
+    LDX.W BonusRoomBlocks-1,Y
+    STA.W BonusRoomBlocks-1,Y
     CMP.B #$FF
     BNE CODE_00F226
     LDA.B #$05
@@ -12966,7 +12968,7 @@ CODE_00F236:
     PLB
     PLY
     LDX.B #$07
-    LDA.W PBalloonInflating,Y
+    LDA.W BonusRoomBlocks-1,Y
 CODE_00F24E:
     LSR A
     BCS +
@@ -13548,53 +13550,53 @@ NoButtons:
     STZ.B axlr0000Frame
     RTS
 
-CODE_00F636:
+SetPlayerDynamicGFXPointers:
     REP #$20                                  ; A->16
-    LDX.B #$00
-    LDA.B _9
-    ORA.W #$0800
-    CMP.B _9
-    BEQ +
-    CLC
-  + AND.W #$F700
-    ROR A
-    LSR A
-    ADC.W #$2000
-    STA.W DynGfxTilePtr
-    CLC
-    ADC.W #$0200
-    STA.W DynGfxTilePtr+$0A
-    LDX.B #$00
-    LDA.B _A
-    ORA.W #$0800
-    CMP.B _A
-    BEQ +
-    CLC
-  + AND.W #$F700
-    ROR A
-    LSR A
-    ADC.W #$2000
-    STA.W DynGfxTilePtr+2
-    CLC
-    ADC.W #$0200
-    STA.W DynGfxTilePtr+$0C
-    LDA.B _B
-    AND.W #$FF00
-    LSR A
-    LSR A
-    LSR A
-    ADC.W #$2000
-    STA.W DynGfxTilePtr+4
-    CLC
-    ADC.W #$0200
-    STA.W DynGfxTilePtr+$0E
-    LDA.B _C
-    AND.W #$FF00
-    LSR A
-    LSR A
-    LSR A
-    ADC.W #$2000
-    STA.W DynGfxTile7FPtr
+    LDX.B #$00                                ; Mario's top 16*16 tile (OAM tile 0) (the LDX shouldn't be here)
+    LDA.B _9                                  ;\
+    ORA.W #$0800                              ;|
+    CMP.B _9                                  ;| Set carry if bit $0800 is set
+    BEQ +                                     ;|
+    CLC                                       ;/
+  + AND.W #$F700                              ; Clear bit $0800
+    ROR A                                     ;\
+    LSR A                                     ;|
+    ADC.W #MarioGraphics                      ;| Offset by 128 16*16 tiles if carry set
+    STA.W DynGfxTilePtr                       ;/
+    CLC                                       ;\
+    ADC.W #$0200                              ;| bottom half of the 16*16 tile
+    STA.W DynGfxTilePtr+$0A                   ;/
+    LDX.B #$00                                ; Mario's bottom 16*16 tile (OAM tile 2)
+    LDA.B _A                                  ; \
+    ORA.W #$0800                              ; |
+    CMP.B _A                                  ; |
+    BEQ +                                     ; |
+    CLC                                       ; |
+  + AND.W #$F700                              ; |
+    ROR A                                     ; | same as above
+    LSR A                                     ; |
+    ADC.W #MarioGraphics                      ; |
+    STA.W DynGfxTilePtr+2                     ; |
+    CLC                                       ; |
+    ADC.W #$0200                              ; |
+    STA.W DynGfxTilePtr+$0C                   ; /
+    LDA.B _B                                  ; \
+    AND.W #$FF00                              ; |
+    LSR A                                     ; |
+    LSR A                                     ; |
+    LSR A                                     ; | cape 16*16 tile, indexed by 8*8 tile number (OAM tile 4)
+    ADC.W #MarioGraphics                      ; |
+    STA.W DynGfxTilePtr+4                     ; |
+    CLC                                       ; |
+    ADC.W #$0200                              ; |
+    STA.W DynGfxTilePtr+$0E                   ; /
+    LDA.B _C                                  ; \
+    AND.W #$FF00                              ; |
+    LSR A                                     ; |
+    LSR A                                     ; | cape 8*8 tile, also indexed by 8*8 tile number (OAM tile $7F)
+    LSR A                                     ; |
+    ADC.W #MarioGraphics                      ; |
+    STA.W DynGfxTile7FPtr                     ; /
     SEP #$20                                  ; A->8
     LDA.B #$0A
     STA.W PlayerGfxTileCount
@@ -14665,16 +14667,18 @@ CODE_00FE72:
     RTS
 
 
-DATA_00FE94:
+FireballXSpeeds:
     db $FD,$03
 
-DATA_00FE96:
-    db $00,$08,$F8,$10,$F8,$10
+FireballXOffLow:
+    db $00,$08                                ; Normal
+    db $F8,$10                                ; Riding Yoshi (impossible)
+    db $F8,$10                                ; Ducking on Yoshi (also impossible)
 
-DATA_00FE9C:
+FireballXOffHigh:
     db $00,$00,$FF,$00,$FF,$00
 
-DATA_00FEA2:
+FireballYOffLow:
     db $08,$08,$0C,$0C,$14,$14
 
 ShootFireball:
@@ -14690,14 +14694,14 @@ CODE_00FEAA:
 CODE_00FEB5:
     LDA.B #!SFX_FIREBALL
     STA.W SPCIO3                              ; / Play sound effect
-    LDA.B #$0A
-    STA.W ShootFireTimer
+    LDA.B #$0A                                ; \ Shoot fireball animation for 10 frames
+    STA.W ShootFireTimer                      ; /
     LDA.B #$05                                ; \ Extended sprite = Mario fireball
     STA.W ExtSpriteNumber,X                   ; /
     LDA.B #$30
     STA.W ExtSpriteYSpeed,X
     LDY.B PlayerDirection
-    LDA.W DATA_00FE94,Y
+    LDA.W FireballXSpeeds,Y
     STA.W ExtSpriteXSpeed,X
     LDA.W PlayerRidingYoshi
     BEQ +
@@ -14709,19 +14713,19 @@ CODE_00FEB5:
     INY
   + LDA.B PlayerXPosNext
     CLC
-    ADC.W DATA_00FE96,Y
+    ADC.W FireballXOffLow,Y
     STA.W ExtSpriteXPosLow,X
     LDA.B PlayerXPosNext+1
-    ADC.W DATA_00FE9C,Y
+    ADC.W FireballXOffHigh,Y
     STA.W ExtSpriteXPosHigh,X
     LDA.B PlayerYPosNext
     CLC
-    ADC.W DATA_00FEA2,Y
+    ADC.W FireballYOffLow,Y
     STA.W ExtSpriteYPosLow,X
     LDA.B PlayerYPosNext+1
     ADC.B #$00
     STA.W ExtSpriteYPosHigh,X
-    LDA.W PlayerBehindNet
+    LDA.W MarioLayerPriority
     STA.W ExtSpritePriority,X
     RTS
 

@@ -5414,7 +5414,7 @@ CODE_01A80F:
     LDA.B #$00                                ; \ Branch if bit 6 of $0D9B set?
     BIT.W IRQNMICommand                       ; |
     BVS +                                     ; /
-    LDA.W PlayerBehindNet                     ; \ If Mario and Sprite not on same side of scenery...
+    LDA.W MarioLayerPriority                  ; \ If Mario and Sprite not on same side of scenery...
     EOR.W SpriteBehindScene,X                 ; |
   + BNE ReturnNoContact2                      ; / ...no contact, return
     JSL GetMarioClipping
@@ -8063,9 +8063,9 @@ ClimbingDoor:
     PLA
   + CMP.B #$10
     BNE +
-    LDA.W PlayerBehindNet
+    LDA.W MarioLayerPriority
     EOR.B #$01
-    STA.W PlayerBehindNet
+    STA.W MarioLayerPriority
   + LDA.B #$30
     STA.W SpriteOAMIndex,X
     STA.B _3
@@ -14333,7 +14333,7 @@ CODE_01EA21:
 Return01EA6F:
     RTS
 
-CODE_01EA70:
+DrawYoshi:
     LDX.W YoshiIsLoose
     BEQ +
     STZ.W ScrShakePlayerYOffset

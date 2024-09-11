@@ -625,7 +625,7 @@ CODE_0485A7:
     JSL CODE_00CEB1
     PLB
     LDA.B #$03
-    STA.W PlayerBehindNet
+    STA.W MarioLayerPriority
     JSL DrawMarioAndYoshi
     LDA.B #$06
     STA.W PlayerGfxTileCount
