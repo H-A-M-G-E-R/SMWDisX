@@ -5412,74 +5412,74 @@ UploadGFXFile:
     LDX.W ObjectTileset                       ; LDX Tileset
     CPX.B #$11                                ; CPX #$11
     BCC CODE_00AA90                           ; If Tileset < #$11 skip to lower area
-    CPY.B #$08                                ; if Y = #$08 skip to JSR
+    CPY.B #$08                                ; if GFX file = #$08 skip to JSR
     BEQ JumpTo_____
 CODE_00AA90:
-    CPY.B #$1E                                ; If Y = #$1E then
+    CPY.B #$1E                                ; If GFX file = #$1E then
     BEQ JumpTo_____                           ; JMP otherwise
     BNE +                                     ; don't JMP
 JumpTo_____:
-    JMP FilterSomeRAM
+    JMP Upload3BppWithHighColors
 
   + STA.B _A
-    LDA.W #$FFFF
-    CPY.B #$01
-    BEQ +
-    CPY.B #$17
-    BEQ +
-    LDA.W #$0000
-  + STA.W GfxBppConvertFlag
-    LDY.B #$7F
+    LDA.W #$FFFF                              ;\
+    CPY.B #$01                                ;|
+    BEQ +                                     ;|
+    CPY.B #$17                                ;| GFX files $01 and $17 makes the first 16*16 tile use high colors (the apple)
+    BEQ +                                     ;|
+    LDA.W #$0000                              ;|
+  + STA.W GfxBppConvertFlag                   ;/
+    LDY.B #$7F                                ; Y = number of tiles to upload minus 1
 CODE_00AAAE:
     LDA.W GfxBppConvertFlag
     BEQ CODE_00AACD
-    CPY.B #$7E
-    BCC CODE_00AABE
+    CPY.B #$7E                                ; \ tiles $00 and $01 use high colors
+    BCC CODE_00AABE                           ; /
 CODE_00AAB7:
-    LDA.W #$FF00
-    STA.B _A
+    LDA.W #$FF00                              ; \ use high colors
+    STA.B _A                                  ; /
     BNE CODE_00AACD
 CODE_00AABE:
-    CPY.B #$6E
-    BCC CODE_00AAC8
-    CPY.B #$70
-    BCS CODE_00AAC8
-    BCC CODE_00AAB7
+    CPY.B #$6E                                ; \
+    BCC CODE_00AAC8                           ; |
+    CPY.B #$70                                ; | tiles $02..$0F and $12..$7F use low colors, $10 and $11 use high colors
+    BCS CODE_00AAC8                           ; |
+    BCC CODE_00AAB7                           ; /
 CODE_00AAC8:
-    LDA.W #$0000
-    STA.B _A
-CODE_00AACD:
+    LDA.W #$0000                              ; \ use low colors
+    STA.B _A                                  ; /
+CODE_00AACD:                                  ; For each 3bpp tile row:
+    LDX.B #$07                                ; \ bitplanes 0 and 1
+  - LDA.B [_0]                                ; |\ upload bitplanes 0 and 1 to vram
+    STA.W HW_VMDATA                           ; |/
+    XBA                                       ; |\
+    ORA.B [_0]                                ; || which 2bpp pixels are nonzero (stored in high byte)
+    STA.W GfxBppConvertBuffer,X               ; |/
+    INC.B _0                                  ; |\
+    INC.B _0                                  ; || next row
+    DEX                                       ; |/
+    BPL -                                     ; /
     LDX.B #$07
-  - LDA.B [_0]
-    STA.W HW_VMDATA
-    XBA
-    ORA.B [_0]
-    STA.W GfxBppConvertBuffer,X
-    INC.B _0
-    INC.B _0
-    DEX
-    BPL -
-    LDX.B #$07
-  - LDA.B [_0]
-    AND.W #$00FF
-    STA.B _C
-    LDA.B [_0]
-    XBA
-    ORA.W GfxBppConvertBuffer,X
-    AND.B _A
-    ORA.B _C
-    STA.W HW_VMDATA
-    INC.B _0
-    DEX
-    BPL -
-    DEY
-    BPL CODE_00AAAE
+  - LDA.B [_0]                                ; \
+    AND.W #$00FF                              ; | bitplane 2
+    STA.B _C                                  ; /
+    LDA.B [_0]                                ; \
+    XBA                                       ; | bitplane 3: use high 8 4bpp colors if 3bpp pixel is nonzero, else, transparency
+    ORA.W GfxBppConvertBuffer,X               ; |
+    AND.B _A                                  ; /
+    ORA.B _C                                  ; \ upload bitplanes 2 and 3 to vram
+    STA.W HW_VMDATA                           ; /
+    INC.B _0                                  ; \
+    DEX                                       ; | next row
+    BPL -                                     ; /
+    DEY                                       ; \ next tile
+    BPL CODE_00AAAE                           ; /
     SEP #$20                                  ; A->8
     RTS
 
-FilterSomeRAM:
-    LDA.W #$FF00
-    STA.B _A
+Upload3BppWithHighColors:                     ; Why isn't it merged with the above?
+    LDA.W #$FF00                              ; \ use high colors
+    STA.B _A                                  ; /
     LDY.B #$7F
 Upload____ToVRAM:
     CPY.B #$08                                ; \Completely pointless code.
@@ -6579,13 +6579,13 @@ PrepareGraphicsFile:
     STA.B GraphicsCompPtr+1
     LDA.W GFXFilesBank,Y
     STA.B GraphicsCompPtr+2
-    LDA.B #$00
-    STA.B _0
-    LDA.B #$AD
-    STA.B _1
-    LDA.B #$7E
-    STA.B _2
-    JSR CODE_00B8DE
+    LDA.B #$00                                ;\
+    STA.B _0                                  ;|
+    LDA.B #$AD                                ;|
+    STA.B _1                                  ;| Decompress to $7EAD00
+    LDA.B #$7E                                ;|
+    STA.B _2                                  ;|
+    JSR CODE_00B8DE                           ;/
     PLY
     PLB
     RTL
